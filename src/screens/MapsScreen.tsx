@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   SafeAreaView,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -63,6 +64,13 @@ const TRAVEL_MODES: {
   { mode: 'transit', icon: 'bus',  label: 'Transit' },
 ];
 
+function formatDuration(raw: string): string {
+  return raw
+    .replace(/(\d+)\s*hours?\s*/i, '$1h ')
+    .replace(/(\d+)\s*mins?\s*$/i, '$1 min')
+    .trim();
+}
+
 interface RouteResult {
   polyline: string;
   distance: string;
@@ -78,6 +86,7 @@ export default function MapsScreen() {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const [travelMode, setTravelMode] = useState<TravelMode>('driving');
+  const [modeCache, setModeCache] = useState<Partial<Record<TravelMode, RouteResult>>>({});
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
@@ -98,6 +107,7 @@ export default function MapsScreen() {
   const getRoute = useCallback(async (mode: TravelMode) => {
     if (!location || !destination.trim()) return;
     setLoading(true);
+    Keyboard.dismiss();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
@@ -119,6 +129,7 @@ export default function MapsScreen() {
       const coords = decodePolyline(data.polyline);
       setRoute(data);
       setRouteCoords(coords);
+      setModeCache(prev => ({ ...prev, [mode]: data }));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       const allCoords = [
@@ -142,6 +153,7 @@ export default function MapsScreen() {
     setRouteCoords([]);
     setDestination('');
     setTravelMode('driving');
+    setModeCache({});
     if (location) {
       mapRef.current?.animateToRegion({
         latitude: location.coords.latitude,
@@ -153,8 +165,25 @@ export default function MapsScreen() {
   };
 
   const handleModeChange = (mode: TravelMode) => {
+    if (mode === travelMode) return;
     setTravelMode(mode);
-    if (route) getRoute(mode);
+    const cached = modeCache[mode];
+    if (cached) {
+      setRoute(cached);
+      const coords = decodePolyline(cached.polyline);
+      setRouteCoords(coords);
+      const allCoords = [
+        { latitude: location!.coords.latitude, longitude: location!.coords.longitude },
+        ...coords,
+      ];
+      mapRef.current?.fitToCoordinates(allCoords, {
+        edgePadding: { top: 60, right: 40, bottom: 40, left: 40 },
+        animated: true,
+      });
+      Haptics.selectionAsync();
+    } else {
+      getRoute(mode);
+    }
   };
 
   if (permissionStatus === 'denied') {
@@ -233,6 +262,8 @@ export default function MapsScreen() {
             <View style={styles.modeRow}>
               {TRAVEL_MODES.map(({ mode, icon, label }) => {
                 const isActive = travelMode === mode;
+                const cached = modeCache[mode];
+                const timeText = cached ? formatDuration(cached.duration) : null;
                 return (
                   <TouchableOpacity
                     key={mode}
@@ -248,8 +279,10 @@ export default function MapsScreen() {
                     />
                     {isActive && loading ? (
                       <ActivityIndicator size="small" color="#fff" style={styles.modeSpinner} />
-                    ) : isActive ? (
-                      <Text style={styles.modeTime}>{route.duration}</Text>
+                    ) : timeText ? (
+                      <Text style={[styles.modeTime, !isActive && styles.modeTimeInactive]}>
+                        {timeText}
+                      </Text>
                     ) : null}
                     <Text style={[styles.modeLabel, isActive && styles.modeLabelActive]}>
                       {label}
@@ -274,7 +307,7 @@ export default function MapsScreen() {
       </SafeAreaView>
 
       {/* Map */}
-      <View style={styles.mapContainer}>
+      <View style={styles.mapContainer} onTouchStart={Keyboard.dismiss}>
         <MapView
           ref={mapRef}
           style={styles.map}
@@ -411,6 +444,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: '#fff',
+  },
+  modeTimeInactive: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
   },
   modeLabel: {
     fontSize: 11,
