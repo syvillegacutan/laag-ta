@@ -163,40 +163,56 @@ export default function TranslateScreen() {
     setIsRecording(false);
     const recording = recordingRef.current;
     recordingRef.current = null;
-    if (!recording) return null;
+    if (!recording) {
+      console.warn('[STT] stopRecording: no recording object in ref');
+      return null;
+    }
     try {
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      return recording.getURI() ?? null;
-    } catch (_) {
+      const uri = recording.getURI();
+      console.log('[STT] recording URI:', uri);
+      return uri ?? null;
+    } catch (err) {
+      console.error('[STT] stopAndUnloadAsync error:', err);
       return null;
     }
   }, []);
 
   const stopAndTranscribe = useCallback(async () => {
     const uri = await stopRecording();
-    if (!uri) return;
+    if (!uri) {
+      console.warn('[STT] no URI from stopRecording — aborting transcription');
+      Alert.alert('Recording error', 'Could not save the audio. Please try again.');
+      return;
+    }
     setIsTranscribing(true);
     try {
+      console.log('[STT] reading file:', uri);
       const base64Audio = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      console.log('[STT] base64 length:', base64Audio.length);
+
+      console.log('[STT] posting to', `${API_URL}/api/stt`);
       const response = await fetch(`${API_URL}/api/stt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audio: base64Audio, mediaType: 'audio/m4a' }),
       });
+      const data = await response.json() as { transcription?: string; error?: string };
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? `HTTP ${response.status}`);
+        throw new Error(data.error ?? `HTTP ${response.status}`);
       }
-      const data = await response.json() as { transcription?: string };
+      console.log('[STT] transcription:', data.transcription);
       if (data.transcription) {
         setInputText(data.transcription);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (err) {
-      Alert.alert('Transcription failed', 'Could not understand audio. Please type your text instead.');
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[STT] error:', msg);
+      Alert.alert('Transcription failed', msg);
     } finally {
       setIsTranscribing(false);
       FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
