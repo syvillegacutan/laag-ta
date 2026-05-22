@@ -243,7 +243,7 @@ export default function TranslateScreen() {
         playsInSilentModeIOS: true,
       });
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
+        Audio.RecordingOptionsPresets.LOW_QUALITY
       );
       recordingRef.current = recording;
       setIsRecording(true);
