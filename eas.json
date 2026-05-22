@@ -1,0 +1,51 @@
+{
+  "cli": {
+    "version": ">= 10.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "ios": {
+        "bundleIdentifier": "com.syvillegacutan.laagta",
+        "buildConfiguration": "Release",
+        "autoIncrement": "buildNumber"
+      },
+      "android": {
+        "applicationId": "com.syvillegacutan.laagta",
+        "buildType": "app-bundle",
+        "autoIncrement": "versionCode"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://laagta-backend-production.up.railway.app"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "YOUR_APPLE_ID@email.com",
+        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "YOUR_APPLE_TEAM_ID"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "production"
+      }
+    }
+  }
+}
