@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { speakText, stopSpeaking } from '../utils/speak';
 import { COLORS } from '../constants/colors';
 import { usePhrasebook } from '../hooks/usePhrasebook';
