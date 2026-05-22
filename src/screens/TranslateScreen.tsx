@@ -15,10 +15,10 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Speech from 'expo-speech';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
+import { speakText, stopSpeaking } from '../utils/speak';
 import { COLORS } from '../constants/colors';
 import { usePhrasebook } from '../hooks/usePhrasebook';
 
@@ -118,7 +118,7 @@ export default function TranslateScreen() {
   const speak = useCallback(async () => {
     if (!result) return;
     if (speaking) {
-      Speech.stop();
+      stopSpeaking();
       setSpeaking(false);
       return;
     }
@@ -129,13 +129,8 @@ export default function TranslateScreen() {
         Animated.timing(pulseAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       ])
     ).start();
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
-    Speech.speak(result.translation, {
-      language: toLang.code.toLowerCase().slice(0, 2),
-      volume: 1.0,
-      onDone: () => { setSpeaking(false); pulseAnim.stopAnimation(); pulseAnim.setValue(1); },
-      onError: () => { setSpeaking(false); pulseAnim.stopAnimation(); pulseAnim.setValue(1); },
-    });
+    const done = () => { setSpeaking(false); pulseAnim.stopAnimation(); pulseAnim.setValue(1); };
+    speakText(result.translation, toLang.code, done, done);
   }, [result, speaking, toLang, pulseAnim]);
 
   const copyToClipboard = useCallback(async () => {
