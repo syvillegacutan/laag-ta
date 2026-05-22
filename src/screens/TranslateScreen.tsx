@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
 import { speakText, stopSpeaking } from '../utils/speak';
 import { COLORS } from '../constants/colors';
 import { usePhrasebook } from '../hooks/usePhrasebook';
@@ -63,6 +64,7 @@ export default function TranslateScreen() {
   const [langModalTarget, setLangModalTarget] = useState<'from' | 'to'>('from');
   const [speaking, setSpeaking] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -153,26 +155,61 @@ export default function TranslateScreen() {
     Alert.alert('Saved!', 'Phrase added to your phrasebook.');
   }, [result, inputText, fromLang, toLang, save]);
 
-  const stopRecording = useCallback(async () => {
+  const stopRecording = useCallback(async (): Promise<string | null> => {
     if (recordingTimerRef.current) {
       clearTimeout(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
     setIsRecording(false);
-    try {
-      await recordingRef.current?.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-    } catch (_) {
-      // ignore cleanup errors
-    }
+    const recording = recordingRef.current;
     recordingRef.current = null;
+    if (!recording) return null;
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      return recording.getURI() ?? null;
+    } catch (_) {
+      return null;
+    }
   }, []);
+
+  const stopAndTranscribe = useCallback(async () => {
+    const uri = await stopRecording();
+    if (!uri) return;
+    setIsTranscribing(true);
+    try {
+      const base64Audio = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const response = await fetch(`${API_URL}/api/stt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: base64Audio, mediaType: 'audio/m4a' }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? `HTTP ${response.status}`);
+      }
+      const data = await response.json() as { transcription?: string };
+      if (data.transcription) {
+        setInputText(data.transcription);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (err) {
+      Alert.alert('Transcription failed', 'Could not understand audio. Please type your text instead.');
+    } finally {
+      setIsTranscribing(false);
+      FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
+    }
+  }, [stopRecording]);
 
   const handleMicPress = useCallback(async () => {
     if (isRecording) {
-      await stopRecording();
+      await stopAndTranscribe();
       return;
     }
+
+    if (isTranscribing) return;
 
     const { status } = await Audio.requestPermissionsAsync();
     if (status !== 'granted') {
@@ -195,15 +232,14 @@ export default function TranslateScreen() {
       recordingRef.current = recording;
       setIsRecording(true);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      recordingTimerRef.current = setTimeout(async () => {
-        await stopRecording();
-        Alert.alert('Recording Stopped', 'Voice input captured. Connect a transcription service to auto-fill the text field.');
+      recordingTimerRef.current = setTimeout(() => {
+        stopAndTranscribe();
       }, 10000);
-    } catch (err) {
+    } catch {
       Alert.alert('Recording Error', 'Could not start recording. Please try again.');
       setIsRecording(false);
     }
-  }, [isRecording, stopRecording]);
+  }, [isRecording, isTranscribing, stopAndTranscribe]);
 
   return (
     <KeyboardAvoidingView
@@ -250,14 +286,19 @@ export default function TranslateScreen() {
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={[styles.micBtn, isRecording && styles.micBtnActive]}
+                style={[styles.micBtn, isRecording && styles.micBtnActive, isTranscribing && styles.micBtnTranscribing]}
                 onPress={handleMicPress}
+                disabled={isTranscribing}
               >
-                <Ionicons
-                  name={isRecording ? 'stop' : 'mic'}
-                  size={16}
-                  color={isRecording ? '#fff' : COLORS.primary}
-                />
+                {isTranscribing ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <Ionicons
+                    name={isRecording ? 'stop' : 'mic'}
+                    size={16}
+                    color={isRecording ? '#fff' : COLORS.primary}
+                  />
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -442,6 +483,9 @@ const styles = StyleSheet.create({
   micBtnActive: {
     backgroundColor: COLORS.error,
     borderColor: COLORS.error,
+  },
+  micBtnTranscribing: {
+    opacity: 0.6,
   },
   translateBtn: {
     backgroundColor: COLORS.primary,
