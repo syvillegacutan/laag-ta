@@ -9,6 +9,7 @@ import {
   Alert,
   Platform,
   KeyboardAvoidingView,
+  SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -169,83 +170,14 @@ export default function MapsScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'height' : undefined}
     >
-      {/* Map */}
-      <MapView
-        ref={mapRef}
-        style={styles.map}
-        provider={PROVIDER_GOOGLE}
-        initialRegion={{
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
-        }}
-        showsUserLocation
-        showsMyLocationButton={false}
-      >
-        {routeCoords.length > 0 && (
-          <Polyline
-            coordinates={routeCoords}
-            strokeColor={COLORS.primary}
-            strokeWidth={4}
-            lineDashPattern={undefined}
-          />
-        )}
-        {destCoord && (
-          <Marker
-            coordinate={destCoord}
-            title={route?.endAddress ?? destination}
-            pinColor={COLORS.primary}
-          />
-        )}
-      </MapView>
-
-      {/* My location button */}
-      <TouchableOpacity
-        style={styles.myLocationBtn}
-        onPress={() => {
-          mapRef.current?.animateToRegion({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
-          }, 400);
-          Haptics.selectionAsync();
-        }}
-      >
-        <Ionicons name="locate" size={20} color={COLORS.primary} />
-      </TouchableOpacity>
-
-      {/* Bottom panel */}
-      <View style={styles.bottomPanel}>
-        {/* Route info strip */}
-        {route && (
-          <View style={styles.routeInfo}>
-            <View style={styles.routeInfoItem}>
-              <Ionicons name="navigate" size={14} color={COLORS.primary} />
-              <Text style={styles.routeInfoValue}>{route.distance}</Text>
-            </View>
-            <View style={styles.routeInfoDivider} />
-            <View style={styles.routeInfoItem}>
-              <Ionicons name="time-outline" size={14} color={COLORS.primary} />
-              <Text style={styles.routeInfoValue}>{route.duration}</Text>
-            </View>
-            <View style={styles.routeInfoDivider} />
-            <Text style={styles.routeInfoAddress} numberOfLines={1}>
-              {route.endAddress}
-            </Text>
-            <TouchableOpacity onPress={clearRoute} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-              <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
-        )}
-
+      {/* Top panel: search + route info */}
+      <SafeAreaView style={styles.topPanel}>
         {/* Search row */}
         <View style={styles.searchRow}>
           <View style={styles.searchInputWrap}>
-            <Ionicons name="search-outline" size={18} color={COLORS.textMuted} style={styles.searchIcon} />
+            <Ionicons name="search-outline" size={18} color={COLORS.textMuted} />
             <TextInput
               style={styles.searchInput}
               placeholder="Where do you want to go?"
@@ -278,6 +210,77 @@ export default function MapsScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        {/* Route info strip */}
+        {route && (
+          <View style={styles.routeInfo}>
+            <View style={styles.routeInfoItem}>
+              <Ionicons name="navigate" size={14} color={COLORS.primary} />
+              <Text style={styles.routeInfoValue}>{route.distance}</Text>
+            </View>
+            <View style={styles.routeInfoDivider} />
+            <View style={styles.routeInfoItem}>
+              <Ionicons name="time-outline" size={14} color={COLORS.primary} />
+              <Text style={styles.routeInfoValue}>{route.duration}</Text>
+            </View>
+            <View style={styles.routeInfoDivider} />
+            <Text style={styles.routeInfoAddress} numberOfLines={1}>
+              {route.endAddress}
+            </Text>
+            <TouchableOpacity onPress={clearRoute} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+              <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+      </SafeAreaView>
+
+      {/* Map */}
+      <View style={styles.mapContainer}>
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          provider={PROVIDER_GOOGLE}
+          initialRegion={{
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          }}
+          showsUserLocation
+          showsMyLocationButton={false}
+        >
+          {routeCoords.length > 0 && (
+            <Polyline
+              coordinates={routeCoords}
+              strokeColor={COLORS.primary}
+              strokeWidth={4}
+              lineDashPattern={undefined}
+            />
+          )}
+          {destCoord && (
+            <Marker
+              coordinate={destCoord}
+              title={route?.endAddress ?? destination}
+              pinColor={COLORS.primary}
+            />
+          )}
+        </MapView>
+
+        {/* My location button — floats over bottom-right of map */}
+        <TouchableOpacity
+          style={styles.myLocationBtn}
+          onPress={() => {
+            mapRef.current?.animateToRegion({
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              latitudeDelta: 0.02,
+              longitudeDelta: 0.02,
+            }, 400);
+            Haptics.selectionAsync();
+          }}
+        >
+          <Ionicons name="locate" size={20} color={COLORS.primary} />
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -285,10 +288,24 @@ export default function MapsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
+  topPanel: {
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 0 : 12,
+    paddingBottom: 12,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 10,
+    zIndex: 10,
+  },
+  mapContainer: { flex: 1 },
   map: { flex: 1 },
   myLocationBtn: {
     position: 'absolute',
-    top: 16,
+    bottom: 16,
     right: 16,
     width: 44,
     height: 44,
@@ -301,20 +318,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 5,
-  },
-  bottomPanel: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 12,
-    paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 10,
-    gap: 10,
   },
   routeInfo: {
     flexDirection: 'row',
@@ -344,7 +347,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  searchIcon: {},
   searchInput: { flex: 1, fontSize: 15, color: COLORS.text },
   routeBtn: {
     width: 48,
