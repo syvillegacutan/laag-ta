@@ -19,7 +19,6 @@ import { COLORS } from '../constants/colors';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
-// Standard Google polyline decoder
 function decodePolyline(encoded: string): { latitude: number; longitude: number }[] {
   const coords: { latitude: number; longitude: number }[] = [];
   let index = 0;
@@ -52,6 +51,18 @@ function decodePolyline(encoded: string): { latitude: number; longitude: number 
   return coords;
 }
 
+type TravelMode = 'driving' | 'walking' | 'transit';
+
+const TRAVEL_MODES: {
+  mode: TravelMode;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+}[] = [
+  { mode: 'driving', icon: 'car',  label: 'Driving' },
+  { mode: 'walking', icon: 'walk', label: 'Walking' },
+  { mode: 'transit', icon: 'bus',  label: 'Transit' },
+];
+
 interface RouteResult {
   polyline: string;
   distance: string;
@@ -66,6 +77,7 @@ export default function MapsScreen() {
   const [loading, setLoading] = useState(false);
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [travelMode, setTravelMode] = useState<TravelMode>('driving');
   const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
@@ -83,11 +95,9 @@ export default function MapsScreen() {
     }
   }, []);
 
-  const getRoute = useCallback(async () => {
+  const getRoute = useCallback(async (mode: TravelMode) => {
     if (!location || !destination.trim()) return;
     setLoading(true);
-    setRoute(null);
-    setRouteCoords([]);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
@@ -100,6 +110,7 @@ export default function MapsScreen() {
             lng: location.coords.longitude,
           },
           destination: destination.trim(),
+          mode,
         }),
       });
       const data = await response.json();
@@ -110,7 +121,6 @@ export default function MapsScreen() {
       setRouteCoords(coords);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Fit map to show the full route
       const allCoords = [
         { latitude: location.coords.latitude, longitude: location.coords.longitude },
         ...coords,
@@ -131,6 +141,7 @@ export default function MapsScreen() {
     setRoute(null);
     setRouteCoords([]);
     setDestination('');
+    setTravelMode('driving');
     if (location) {
       mapRef.current?.animateToRegion({
         latitude: location.coords.latitude,
@@ -139,6 +150,11 @@ export default function MapsScreen() {
         longitudeDelta: 0.02,
       }, 400);
     }
+  };
+
+  const handleModeChange = (mode: TravelMode) => {
+    setTravelMode(mode);
+    if (route) getRoute(mode);
   };
 
   if (permissionStatus === 'denied') {
@@ -172,7 +188,7 @@ export default function MapsScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'height' : undefined}
     >
-      {/* Top panel: search + route info */}
+      {/* Top panel */}
       <SafeAreaView style={styles.topPanel}>
         {/* Search row */}
         <View style={styles.searchRow}>
@@ -185,7 +201,7 @@ export default function MapsScreen() {
               value={destination}
               onChangeText={setDestination}
               returnKeyType="search"
-              onSubmitEditing={getRoute}
+              onSubmitEditing={() => getRoute(travelMode)}
               autoCorrect={false}
             />
             {destination.length > 0 && (
@@ -200,10 +216,10 @@ export default function MapsScreen() {
               styles.routeBtn,
               (!destination.trim() || loading) && styles.routeBtnDisabled,
             ]}
-            onPress={getRoute}
+            onPress={() => getRoute(travelMode)}
             disabled={!destination.trim() || loading}
           >
-            {loading ? (
+            {loading && !route ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <Ionicons name="navigate" size={20} color="#fff" />
@@ -211,26 +227,49 @@ export default function MapsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Route info strip */}
+        {/* Travel mode selector + address strip — shown once a route is found */}
         {route && (
-          <View style={styles.routeInfo}>
-            <View style={styles.routeInfoItem}>
-              <Ionicons name="navigate" size={14} color={COLORS.primary} />
-              <Text style={styles.routeInfoValue}>{route.distance}</Text>
+          <>
+            <View style={styles.modeRow}>
+              {TRAVEL_MODES.map(({ mode, icon, label }) => {
+                const isActive = travelMode === mode;
+                return (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.modeBtn, isActive && styles.modeBtnActive]}
+                    onPress={() => handleModeChange(mode)}
+                    disabled={loading}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons
+                      name={icon}
+                      size={22}
+                      color={isActive ? '#fff' : COLORS.textMuted}
+                    />
+                    {isActive && loading ? (
+                      <ActivityIndicator size="small" color="#fff" style={styles.modeSpinner} />
+                    ) : isActive ? (
+                      <Text style={styles.modeTime}>{route.duration}</Text>
+                    ) : null}
+                    <Text style={[styles.modeLabel, isActive && styles.modeLabelActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <View style={styles.routeInfoDivider} />
-            <View style={styles.routeInfoItem}>
-              <Ionicons name="time-outline" size={14} color={COLORS.primary} />
-              <Text style={styles.routeInfoValue}>{route.duration}</Text>
+
+            <View style={styles.routeInfo}>
+              <Ionicons name="location" size={14} color={COLORS.primary} />
+              <Text style={styles.routeInfoAddress} numberOfLines={1}>
+                {route.endAddress}
+              </Text>
+              <Text style={styles.routeInfoDistance}>{route.distance}</Text>
+              <TouchableOpacity onPress={clearRoute} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
+              </TouchableOpacity>
             </View>
-            <View style={styles.routeInfoDivider} />
-            <Text style={styles.routeInfoAddress} numberOfLines={1}>
-              {route.endAddress}
-            </Text>
-            <TouchableOpacity onPress={clearRoute} hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-              <Ionicons name="close-circle" size={20} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
+          </>
         )}
       </SafeAreaView>
 
@@ -266,7 +305,7 @@ export default function MapsScreen() {
           )}
         </MapView>
 
-        {/* My location button — floats over bottom-right of map */}
+        {/* My location button */}
         <TouchableOpacity
           style={styles.myLocationBtn}
           onPress={() => {
@@ -319,21 +358,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
   },
-  routeInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primaryBg,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '30',
-  },
-  routeInfoItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  routeInfoValue: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
-  routeInfoDivider: { width: 1, height: 16, backgroundColor: COLORS.primary + '40' },
-  routeInfoAddress: { flex: 1, fontSize: 12, color: COLORS.textSecondary },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchInputWrap: {
     flex: 1,
@@ -362,6 +386,53 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   routeBtnDisabled: { opacity: 0.5, shadowOpacity: 0, elevation: 0 },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  modeBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: COLORS.surfaceAlt,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    gap: 3,
+    minHeight: 74,
+  },
+  modeBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  modeSpinner: { marginVertical: 2 },
+  modeTime: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  modeLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  modeLabelActive: {
+    color: 'rgba(255,255,255,0.85)',
+  },
+  routeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primaryBg,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '30',
+  },
+  routeInfoAddress: { flex: 1, fontSize: 12, color: COLORS.textSecondary },
+  routeInfoDistance: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 16 },
   permissionTitle: { fontSize: 18, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
   permissionText: { fontSize: 15, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 22 },
