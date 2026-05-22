@@ -19,7 +19,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
-import { speakText, stopSpeaking } from '../utils/speak';
+import { speakText, stopSpeaking, normalizeLangCode } from '../utils/speak';
 import { COLORS } from '../constants/colors';
 import { usePhrasebook } from '../hooks/usePhrasebook';
 
@@ -194,11 +194,12 @@ export default function TranslateScreen() {
       });
       console.log('[STT] base64 length:', base64Audio.length);
 
-      console.log('[STT] posting to', `${API_URL}/api/stt`);
+      const whisperLang = normalizeLangCode(fromLang.code).split('-')[0];
+      console.log('[STT] posting to', `${API_URL}/api/stt`, 'lang:', whisperLang);
       const response = await fetch(`${API_URL}/api/stt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio: base64Audio, mediaType: 'audio/m4a' }),
+        body: JSON.stringify({ audio: base64Audio, mediaType: 'audio/m4a', language: whisperLang }),
       });
       const data = await response.json() as { transcription?: string; error?: string };
       if (!response.ok) {
@@ -217,7 +218,7 @@ export default function TranslateScreen() {
       setIsTranscribing(false);
       FileSystem.deleteAsync(uri, { idempotent: true }).catch(() => {});
     }
-  }, [stopRecording]);
+  }, [stopRecording, fromLang]);
 
   const handleMicPress = useCallback(async () => {
     if (isRecording) {
@@ -250,7 +251,7 @@ export default function TranslateScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       recordingTimerRef.current = setTimeout(() => {
         stopAndTranscribe();
-      }, 10000);
+      }, 6000);
     } catch {
       Alert.alert('Recording Error', 'Could not start recording. Please try again.');
       setIsRecording(false);
