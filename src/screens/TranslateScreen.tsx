@@ -129,8 +129,10 @@ export default function TranslateScreen() {
         Animated.timing(pulseAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       ])
     ).start();
-    await Speech.speak(result.translation, {
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+    Speech.speak(result.translation, {
       language: toLang.code.toLowerCase().slice(0, 2),
+      volume: 1.0,
       onDone: () => { setSpeaking(false); pulseAnim.stopAnimation(); pulseAnim.setValue(1); },
       onError: () => { setSpeaking(false); pulseAnim.stopAnimation(); pulseAnim.setValue(1); },
     });

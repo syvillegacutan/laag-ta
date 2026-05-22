@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import { COLORS } from '../constants/colors';
 import {
   PHRASES_DATA,
@@ -45,8 +46,10 @@ export default function PhrasesScreen() {
     }
     setSpeakingId(id);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Speech.speak(text, {
+    await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+    Speech.speak(text, {
       language: selectedLang.code,
+      volume: 1.0,
       onDone: () => setSpeakingId(null),
       onError: () => setSpeakingId(null),
     });
