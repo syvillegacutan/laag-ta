@@ -1,0 +1,25 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+.env
+.env.local
+.env.production
+google-service-account.json
+
+# Backend (separate git repo — not part of this project)
+laagta-backend/
+
+# SVG sources (PNGs are committed — re-generate with: npm run generate:assets)
+
+# Claude Code config
+.claude/
+
+# Asset generation script dependencies
+scripts/node_modules/
