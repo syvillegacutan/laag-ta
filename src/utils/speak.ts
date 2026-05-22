@@ -1,4 +1,4 @@
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -29,16 +29,24 @@ export function normalizeLangCode(code: string): string {
 }
 
 let currentSound: Audio.Sound | null = null;
+let audioConfigured = false;
 
 async function configureAudio(): Promise<void> {
+  if (audioConfigured) return;
   await Audio.setAudioModeAsync({
     allowsRecordingIOS: false,
+    interruptionModeIOS: InterruptionModeIOS.DoNotMix,
     playsInSilentModeIOS: true,
     staysActiveInBackground: false,
+    interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
     shouldDuckAndroid: true,
     playThroughEarpieceAndroid: false,
   });
+  audioConfigured = true;
 }
+
+// Call once at app start so the audio session is ready before first tap
+configureAudio().catch(() => { audioConfigured = false; });
 
 async function playUri(
   uri: string,
@@ -46,7 +54,7 @@ async function playUri(
   onError?: () => void,
 ): Promise<void> {
   await stopSpeaking();
-  await configureAudio();
+  if (!audioConfigured) await configureAudio();
 
   let sound: Audio.Sound;
   try {

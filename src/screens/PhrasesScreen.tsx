@@ -39,7 +39,7 @@ export default function PhrasesScreen() {
     const text = 'native' in phrase ? phrase.native : phrase.translation;
     const id = phrase.id;
     if (speakingId === id) {
-      stopSpeaking();
+      await stopSpeaking();
       setSpeakingId(null);
       return;
     }
